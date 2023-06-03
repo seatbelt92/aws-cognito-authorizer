@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  AWS SAM template for AWS Cognito Example
+
+Parameters:
+  TestUserPoolId:
+    Type: String
+
+Globals:
+  Function:
+    Runtime: nodejs16.x
+    Handler: handler.handler
+    Tracing: Active
+    MemorySize: 1024
+    Timeout: 5
+    Environment:
+      Variables:
+        TEST_USER_POOL_ID: !Ref TestUserPoolId
+
+Resources:
+  TestApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: my
+      OpenApiVersion: "3.0.0"
+      TracingEnabled: true
+      EndpointConfiguration:
+        Type: REGIONAL
+      Cors:
+        AllowOrigin: "'*'"
+        AllowMethods: "'*'"
+        AllowHeaders: "'Content-Type, Authorization'"
+      Auth:
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          TestUserAuth:
+            UserPoolArn: !Sub arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${TestUserPoolId}
+          LambdaTokenAuthorizer:
+            FunctionArn: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:test-authorizer
+        DefaultAuthorizer: LambdaTokenAuthorizer
+
+  GetMethodFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: get-method
+      CodeUri: handlers/get-method
+      Policies:
+        - AWSLambdaRole
+      Events:
+        GetMethod:
+          Type: Api
+          Properties:
+            Path: /test
+            Method: get
+            RestApiId:
+              Ref: TestApiGateway
+            Auth:
+              Authorizer: TestUserAuth
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        UseNpmCi: true
+        EntryPoints: 
+          - handler.ts
+
+  PostMethodFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: post-method
+      CodeUri: handlers/post-method
+      Policies:
+        - AWSLambdaRole
+      Events:
+        PostMethod:
+          Type: Api
+          Properties:
+            Path: /test
+            Method: post
+            RestApiId:
+              Ref: TestApiGateway
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        UseNpmCi: true
+        EntryPoints: 
+          - handler.ts
+
+  GetPublicInfoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: get-public-info
+      CodeUri: handlers/get-public-info
+      Policies:
+        - AWSLambdaRole
+      Events:
+        GetPublicMethod:
+          Type: Api
+          Properties:
+            Path: /test/public
+            Method: get
+            RestApiId:
+              Ref: TestApiGateway
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        UseNpmCi: true
+        EntryPoints: 
+          - handler.ts
+
+  TestAuthorizerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: test-authorizer
+      CodeUri: authorizer
+      Policies:
+        - AWSLambdaRole
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        UseNpmCi: true
+        EntryPoints:
+          - handler.ts
